@@ -79,7 +79,7 @@ def test_first_acceptance_scenario_register_and_complete_task():
 
         dashboard = client.get("/")
         assert dashboard.status_code == 200
-        assert "Agent Relay" in dashboard.text
+        assert "Agent Relay v2" in dashboard.text
 
 
 def test_protocol_idempotency_terminal_retry_and_auth_boundary():
@@ -195,6 +195,7 @@ def test_dashboard_is_asset_and_invalid_input_is_documented_error():
     with TestClient(main.app) as client:
         page = client.get("/")
         assert page.status_code == 200
+        assert "Agent Relay v2" in page.text
         assert "sessionStorage" in page.text
         missing_name = client.post("/api/v1/agents", json={})
         assert missing_name.status_code == 400

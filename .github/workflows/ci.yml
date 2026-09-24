@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: relay
+          POSTGRES_USER: relay
+          POSTGRES_PASSWORD: relay
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U relay -d relay"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      RELAY_DATABASE_URL: postgresql+psycopg://relay:relay@127.0.0.1:5432/relay
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv sync --locked --dev
+
+      - name: Run starter tests
+        run: uv run pytest -q test_agent_relay.py
+
+      - name: Build app image
+        run: docker build -t agent-relay:${{ github.sha }} .
+
+      - name: Set up kind cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: agent-relay-kind
+
+      - name: Load image into kind
+        run: |
+          kind load docker-image agent-relay:${{ github.sha }} --name agent-relay-kind
+
+      - name: Deploy app with durable DB in kind
+        run: |
+          kubectl get nodes
+          kubectl apply -f k8s/postgres.yaml
+          kubectl apply -f k8s/agent-relay.yaml
+          kubectl rollout status statefulset/postgres --timeout=180s
+          kubectl rollout status deployment/agent-relay --timeout=180s
+
+      - name: Verify dashboard heading after deployment
+        run: |
+          kubectl port-forward svc/agent-relay 8000:8000 >/tmp/agent-relay-portforward.log 2>&1 &
+          sleep 10
+          curl -fsS http://127.0.0.1:8000/ | grep -q 'Agent Relay v2'
