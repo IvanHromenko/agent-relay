@@ -14,7 +14,7 @@ COPY *.py ./
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir uv && \
-    uv sync --frozen --no-dev
+    uv sync --locked --no-dev
 
 RUN mkdir -p /data
 

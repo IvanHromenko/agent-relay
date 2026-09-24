@@ -13,10 +13,7 @@ uv run uvicorn main:app --reload
 ```
 
 Open <http://127.0.0.1:8000/> for the token-based local dashboard. The default
-database is `./agent-relay.db`; set `RELAY_DATABASE_URL` to use another SQLite
-file. `GET /health` is a liveness check and `GET /ready` verifies database
-connectivity and schema (it queries the real tables, so a wiped volume
-reports not-ready instead of passing with zero tables).
+The default database is PostgreSQL at `postgres:5432` for the Compose stack; set `RELAY_DATABASE_URL` to override it. `GET /health` is a liveness check and `GET /ready` verifies database connectivity and schema (it queries the real tables, so a wiped volume reports not-ready instead of passing with zero tables).
 
 Register two identities and send a task:
 

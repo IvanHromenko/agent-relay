@@ -19,7 +19,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 
 
 def _database_url() -> str:
-    return os.getenv("RELAY_DATABASE_URL") or os.getenv("DATABASE_URL") or "sqlite:///./agent-relay.db"
+    return os.getenv("RELAY_DATABASE_URL") or os.getenv("DATABASE_URL") or "postgresql+psycopg://relay:relay@postgres:5432/relay"
 
 
 def positive_int(name: str, default: int) -> int:
