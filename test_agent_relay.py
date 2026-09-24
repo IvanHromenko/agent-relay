@@ -12,8 +12,10 @@ import os
 
 # Default to a scratch DB so `pytest` never resets the dev server's
 # `./agent-relay.db`. Respect an explicit RELAY_DATABASE_URL/DATABASE_URL
-# (e.g. CI pointing at PostgreSQL), but otherwise isolate tests.
-os.environ.setdefault("RELAY_DATABASE_URL", "sqlite:////tmp/agent-relay-test.db")
+# (e.g. CI pointing at PostgreSQL), but otherwise isolate tests. Use a
+# working-directory-relative path so the same test suite can run reliably on
+# Windows and Unix-like hosts.
+os.environ.setdefault("RELAY_DATABASE_URL", "sqlite:///./agent-relay-test.db")
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -41,6 +43,43 @@ def register(client: TestClient, name: str) -> tuple[dict, dict[str, str]]:
     assert response.status_code == 201
     data = response.json()
     return data, {"Authorization": f"Bearer {data['token']}"}
+
+
+def test_first_acceptance_scenario_register_and_complete_task():
+    with TestClient(main.app) as client:
+        sender, sender_headers = register(client, "alice")
+        recipient, recipient_headers = register(client, "bob")
+
+        task = client.post(
+            "/api/v1/tasks",
+            headers=sender_headers,
+            json={"to": recipient["agent_id"], "input": "hello relay"},
+        )
+        assert task.status_code == 201
+        task_id = task.json()["task_id"]
+
+        claimed = client.post(
+            "/api/v1/tasks/claim",
+            headers=recipient_headers,
+            json={"worker_id": "worker-a", "wait_seconds": 0},
+        )
+        assert claimed.status_code == 200
+        claim_token = claimed.json()["claim_token"]
+
+        completed = client.post(
+            f"/api/v1/tasks/{task_id}/complete",
+            headers=recipient_headers,
+            json={"claim_token": claim_token, "output": "HELLO RELAY"},
+        )
+        assert completed.status_code == 200
+
+        sender_task = client.get(f"/api/v1/tasks/{task_id}", headers=sender_headers)
+        assert sender_task.status_code == 200
+        assert sender_task.json()["status"] == "completed"
+
+        dashboard = client.get("/")
+        assert dashboard.status_code == 200
+        assert "Agent Relay" in dashboard.text
 
 
 def test_protocol_idempotency_terminal_retry_and_auth_boundary():
